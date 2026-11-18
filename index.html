@@ -307,7 +307,7 @@
                 </div>
                 <div class="mt-2">
                     <span id="emergencyBalanceDisplay" class="text-2xl md:text-3xl font-black text-blue-700">₪0</span>
-                    <p class="text-[11px] text-slate-400 mt-0.5">סכום שמוגן מבלת"מים!</p>
+                    <p class="text-[11px] text-slate-400 mt-0.5">מוגן מבלת"ם, ואפשר להוציא לקניות</p>
                 </div>
             </div>
 
@@ -346,15 +346,21 @@
                     🏦
                 </div>
                 <div>
-                    <h3 class="font-bold text-lg">חוק הזהב: שמרי כסף בצד לחירום!</h3>
-                    <p class="text-xs text-blue-100">בלת"ם יכול להפתיע בכל רגע. כסף שתעבירי לקופת החירום יהיה מוגן!</p>
+                    <h3 class="font-bold text-lg">חוק הזהב: החליטי כמה לשמור לחירום</h3>
+                    <p class="text-xs text-blue-100">בחרי סכום מהכסף הפנוי. בחירום הוא מוגן מבלת"ם, ואפשר להוציא אותו בחזרה כדי לקנות.</p>
                 </div>
             </div>
-            <div class="flex items-center gap-2 w-full md:w-auto">
-                <input type="number" id="depositAmountInput" placeholder="סכום (₪)" min="10" step="10" value="50" class="w-28 px-3 py-2 rounded-xl text-slate-800 text-sm font-bold outline-none border-2 border-white/30 text-center">
-                <button onclick="depositToEmergency()" class="bg-emerald-400 hover:bg-emerald-500 text-slate-900 font-extrabold px-4 py-2 rounded-xl text-sm transition shadow-lg flex-1 md:flex-initial whitespace-nowrap">
-                    <i class="fa-solid fa-piggy-bank ml-1"></i> העברי לחירום
-                </button>
+            <div class="flex flex-col gap-2 w-full md:w-auto md:min-w-[300px]">
+                <input type="number" id="depositAmountInput" placeholder="כמה ₪?" min="1" step="1" class="w-full px-3 py-2 rounded-xl text-slate-800 text-sm font-bold outline-none border-2 border-white/30 text-center">
+                <div class="flex items-center gap-2">
+                    <button onclick="depositToEmergency()" class="bg-emerald-400 hover:bg-emerald-500 text-slate-900 font-extrabold px-3 py-2 rounded-xl text-sm transition shadow-lg flex-1 whitespace-nowrap">
+                        <i class="fa-solid fa-piggy-bank ml-1"></i> שמרי בחירום
+                    </button>
+                    <button onclick="withdrawFromEmergency()" class="bg-white hover:bg-blue-50 text-blue-800 font-extrabold px-3 py-2 rounded-xl text-sm transition shadow-lg flex-1 whitespace-nowrap">
+                        <i class="fa-solid fa-wallet ml-1"></i> הוציאי לקניות
+                    </button>
+                </div>
+                <p id="emergencyTransferNote" class="text-[11px] text-blue-100 min-h-[1rem]"></p>
             </div>
         </section>
 
@@ -626,6 +632,14 @@
                     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
                     osc.start(now);
                     osc.stop(now + 0.25);
+                } else if (type === 'withdraw') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(700, now);
+                    osc.frequency.setValueAtTime(520, now + 0.08);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+                    osc.start(now);
+                    osc.stop(now + 0.22);
                 } else if (type === 'alert') {
                     osc.type = 'sawtooth';
                     osc.frequency.setValueAtTime(440, now);
@@ -771,6 +785,8 @@
             });
             const roleScreen = document.getElementById('roleSelectorScreen');
             if (roleScreen) roleScreen.classList.remove('hidden');
+            const transferNote = document.getElementById('emergencyTransferNote');
+            if (transferNote) transferNote.textContent = '';
             currentRole = null;
         }
 
@@ -924,13 +940,52 @@
             updateUI();
         }
 
+        function readTransferAmount() {
+            return parseInt(document.getElementById('depositAmountInput').value, 10) || 0;
+        }
+
+        function showEmergencyNote(text) {
+            const note = document.getElementById('emergencyTransferNote');
+            if (note) note.textContent = text;
+        }
+
         function depositToEmergency() {
-            const amount = parseInt(document.getElementById('depositAmountInput').value) || 0;
-            if (amount <= 0 || amount > gameState.freeBalance) return;
+            const amount = readTransferAmount();
+            if (amount <= 0) {
+                showEmergencyNote('בחרי סכום שרוצות לשמור.');
+                return;
+            }
+            if (amount > gameState.freeBalance) {
+                showEmergencyNote(`אפשר לשמור עד ₪${gameState.freeBalance} מהכסף הפנוי.`);
+                return;
+            }
             gameState.freeBalance -= amount;
             gameState.emergencyBalance += amount;
             playSound('deposit');
             logEvent(`🛡️ העברת ₪${amount} לקופת חירום!`);
+            showEmergencyNote(`שמרת ₪${amount} בחירום. נשארו ₪${gameState.freeBalance} לקניות.`);
+            updateUI();
+        }
+
+        function withdrawFromEmergency() {
+            const amount = readTransferAmount();
+            if (amount <= 0) {
+                showEmergencyNote('בחרי סכום שרוצות להוציא.');
+                return;
+            }
+            if (gameState.emergencyBalance <= 0) {
+                showEmergencyNote('קופת החירום ריקה.');
+                return;
+            }
+            if (amount > gameState.emergencyBalance) {
+                showEmergencyNote(`אפשר להוציא עד ₪${gameState.emergencyBalance} מקופת החירום.`);
+                return;
+            }
+            gameState.emergencyBalance -= amount;
+            gameState.freeBalance += amount;
+            playSound('withdraw');
+            logEvent(`👛 הוצאת ₪${amount} מקופת החירום חזרה לקניות.`);
+            showEmergencyNote(`הוצאת ₪${amount} לקניות. עכשיו יש ₪${gameState.freeBalance} פנוי.`);
             updateUI();
         }
 
