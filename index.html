@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>חכמות בכסף - משחק תקציב ובלת"מים בסדנא</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts (Rubik) -->
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Rubik', 'sans-serif'] },
+                    colors: {
+                        brand: { 50: '#fdf4ff', 100: '#fae8ff', 200: '#f5d0fe', 400: '#e879f9', 500: '#d946ef', 600: '#c026d3', 700: '#a21caf' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Rubik', sans-serif;
+            background: linear-gradient(135deg, #fce7f3 0%, #f3e8ff 50%, #e0f2fe 100%);
+            min-height: 100vh;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.7);
+        }
+        .pulse-emergency {
+            animation: pulse-red 1.5s infinite;
+        }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .sheet-modal {
+            align-items: flex-start !important;
+            justify-content: center;
+            overflow-y: auto !important;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            padding: 8px !important;
+        }
+        .sheet-modal > div {
+            max-height: none !important;
+            margin-bottom: 12px;
+        }
+        @media (max-width: 700px) {
+            body {
+                padding: 6px !important;
+                padding-bottom: 8px !important;
+            }
+            #roleSelectorScreen {
+                margin-top: 8px !important;
+                margin-bottom: 8px !important;
+                padding: 16px !important;
+            }
+            #playerInterface > header,
+            #adminInterface > header {
+                padding: 10px !important;
+                gap: 8px !important;
+                border-radius: 16px !important;
+            }
+            #playerInterface > header h1 {
+                font-size: 1.15rem !important;
+                line-height: 1.2;
+            }
+            #playerInterface > header p {
+                display: none;
+            }
+            #playerInterface section.grid {
+                gap: 8px !important;
+            }
+            #surpriseModal > div {
+                padding: 12px !important;
+                border-width: 3px !important;
+            }
+            #surpriseModal h2 {
+                font-size: 1.15rem !important;
+                margin-top: 6px !important;
+                margin-bottom: 6px !important;
+            }
+            #surpriseModal .mb-4 { margin-bottom: 8px !important; }
+            #surpriseModal .mb-6 { margin-bottom: 10px !important; }
+            #surpriseModal .pulse-emergency {
+                width: 44px;
+                height: 44px;
+                font-size: 1.3rem;
+                margin-bottom: 6px !important;
+            }
+            #summaryModal > div {
+                padding: 14px !important;
+            }
+        }
+    </style>
+</head>
+<body class="p-3 md:p-6 text-slate-800 pb-20">
+
+    <!-- ROLE SELECTION SCREEN -->
+    <div id="roleSelectorScreen" class="max-w-md mx-auto my-12 glass-card rounded-3xl p-8 shadow-2xl text-center border-4 border-brand-500">
+        <div class="w-20 h-20 bg-brand-500 text-white rounded-3xl flex items-center justify-center text-4xl mx-auto mb-4 shadow-lg">
+            💎
+        </div>
+        <h1 class="text-3xl font-extrabold text-slate-800 mb-2">חכמות בכסף</h1>
+        <p class="text-sm text-slate-500 mb-6">ברוכים הבאים לסדנה הפיננסית! לבחירת סוג הממשק:</p>
+
+        <div class="space-y-4">
+            <button onclick="selectMode('player')" class="w-full py-4 bg-gradient-to-r from-brand-500 to-purple-600 hover:from-brand-600 hover:to-purple-700 text-white font-extrabold rounded-2xl shadow-lg transition transform hover:scale-105 flex items-center justify-center gap-3 text-lg">
+                <i class="fa-solid fa-gamepad"></i>
+                <span>כניסה כמשתתפת בסדנא</span>
+            </button>
+
+            <button onclick="requestAdminAccess()" class="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-2xl shadow-md transition flex items-center justify-center gap-2 text-base">
+                <i class="fa-solid fa-lock"></i>
+                <span>כניסה כמנהלת המשחק (מדריכה)</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- PLAYER WELCOME / START MODAL -->
+    <div id="playerWelcomeModal" class="sheet-modal fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-start justify-center p-2 hidden">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border-4 border-brand-500 text-center">
+            <div class="w-16 h-16 bg-brand-100 text-brand-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-3">
+                👑
+            </div>
+            <h3 class="text-xl font-black text-slate-800 mb-1">ברוכה הבאה לסדנא!</h3>
+            <p class="text-xs text-slate-500 mb-4">הכניסי את שמך כדי שהמדריכה תזהה אותך בלוח הבקרה:</p>
+            <input type="text" id="welcomePlayerNameInput" placeholder="הכניסי את שמך..." class="w-full text-center px-4 py-3 rounded-xl border-2 border-slate-300 font-bold text-lg outline-none focus:border-brand-500 mb-4">
+            <button onclick="confirmPlayerStart()" class="w-full py-3.5 bg-gradient-to-r from-brand-500 to-purple-600 hover:from-brand-600 hover:to-purple-700 text-white font-extrabold rounded-xl text-base shadow-lg transition transform hover:scale-105">
+                🚀 התחילי לשחק!
+            </button>
+        </div>
+    </div>
+
+    <!-- ADMIN PASSCODE MODAL -->
+    <div id="adminAuthModal" class="sheet-modal fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-start justify-center p-2 hidden">
+        <div class="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border-4 border-amber-500 text-center">
+            <div class="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-3">
+                🔑
+            </div>
+            <h3 class="text-xl font-black text-slate-800 mb-1">כניסת מנהלת הסדנא</h3>
+            <p class="text-xs text-slate-500 mb-4">הכניסי את קוד הגישה למדריכה</p>
+            <input type="password" id="adminPasscodeInput" placeholder="קוד גישה..." class="w-full text-center px-4 py-3 rounded-xl border-2 border-slate-300 font-bold text-lg outline-none focus:border-amber-500 mb-4" onkeydown="if(event.key === 'Enter') verifyAdminPasscode()">
+            <div class="flex gap-2">
+                <button onclick="closeAdminAuthModal()" class="w-1/2 py-2.5 bg-slate-200 text-slate-700 font-bold rounded-xl text-xs">ביטול</button>
+                <button onclick="verifyAdminPasscode()" class="w-1/2 py-2.5 bg-amber-500 text-white font-bold rounded-xl text-xs shadow-md">אישור כניסה</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 1. INSTRUCTOR INTERFACE -->
+    <div id="adminInterface" class="max-w-6xl mx-auto space-y-6 hidden">
+        <header class="glass-card rounded-3xl p-5 shadow-xl flex justify-between items-center border-b-4 border-amber-500">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-white text-2xl shadow-md">
+                    👑
+                </div>
+                <div>
+                    <h1 class="text-2xl font-black text-slate-800">פאנל מנהלת הסדנא (המדריכה)</h1>
+                    <p class="text-xs text-slate-500">שליטה מרחוק, צפייה בבחירות הבנות ושיגור בלת"מים בזמן אמת</p>
+                </div>
+            </div>
+            <button onclick="switchRoleView('player')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold">
+                מעבר לממשק שחקנית
+            </button>
+        </header>
+
+        <div class="glass-card rounded-3xl p-6 shadow-xl border border-white">
+            <div class="flex flex-wrap justify-between items-center mb-4 gap-2">
+                <h2 class="text-lg font-black text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-users text-brand-600"></i>
+                    <span>📊 בנות הסדנא בלייב (<span id="activePlayerCount">0</span> משתתפות)</span>
+                </h2>
+                <button id="clearResultsBtn" onclick="confirmClearResults()" class="text-xs text-rose-600 hover:text-rose-800 font-bold underline">
+                    איפוס נתונים לסדנא חדשה
+                </button>
+            </div>
+
+            <div id="adminPlayersGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="col-span-full text-center py-12 text-slate-400">
+                    <p class="text-sm">ממתין להתחברות הבנות בסדנא...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="glass-card rounded-3xl p-6 shadow-xl border border-white space-y-4">
+                <h3 class="font-extrabold text-slate-800 text-md flex items-center gap-2 border-b border-slate-200 pb-3">
+                    <i class="fa-solid fa-bolt text-amber-500"></i>
+                    <span>שיגור בלת"ם מרחוק (לכל המשתתפות)</span>
+                </h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="adminPresetEvents"></div>
+                <hr class="border-slate-200 my-2">
+                <div class="bg-amber-50 p-4 rounded-2xl border border-amber-200 space-y-3">
+                    <h4 class="text-xs font-bold text-amber-900">יצירת בלת"ם מותאם אישית בלייב:</h4>
+                    <input type="text" id="customTitleInput" placeholder="כותרת הבלת&quot;ם" class="w-full px-3 py-2 rounded-xl text-xs border border-slate-300">
+                    <div class="grid grid-cols-2 gap-2">
+                        <input type="number" id="customCostInput" placeholder="סכום (₪)" class="px-3 py-2 rounded-xl text-xs font-bold border border-slate-300">
+                        <select id="customTypeSelect" class="px-3 py-2 rounded-xl text-xs border border-slate-300">
+                            <option value="expense">הוצאה 💸</option>
+                            <option value="income">הכנסה 🎁</option>
+                        </select>
+                    </div>
+                    <button onclick="broadcastCustomSurprise()" class="w-full py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs transition">
+                        🚀 שלחי בלת"ם לכל הבנות כעת
+                    </button>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-3xl p-6 shadow-xl border border-white space-y-4">
+                <h3 class="font-extrabold text-slate-800 text-md flex items-center gap-2 border-b border-slate-200 pb-3">
+                    <i class="fa-solid fa-comment-dots text-purple-600"></i>
+                    <span>שליחת הערת מדריכה בלייב</span>
+                </h3>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">בחרי נערה מקבלת (או לכולן):</label>
+                    <select id="noteTargetSelect" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800">
+                        <option value="ALL">כל הבנות בסדנא 📣</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">הודעה / הערה מהמדריכה:</label>
+                    <textarea id="noteTextInput" rows="3" placeholder="למשל: כל הכבוד ששמרת לקופת חירום!..." class="w-full p-3 rounded-xl border border-slate-300 text-xs"></textarea>
+                </div>
+                <button onclick="sendInstructorNote()" class="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs transition shadow-md flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    <span>שלחי הערה ישר למסך שלהן!</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. PLAYER INTERFACE -->
+    <div id="playerInterface" class="max-w-6xl mx-auto space-y-6 hidden">
+        <header class="glass-card rounded-3xl p-4 md:p-6 shadow-xl flex flex-wrap justify-between items-center gap-4 border-b-4 border-brand-500">
+            <div class="flex items-center space-x-3 space-x-reverse">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-500 to-purple-600 flex items-center justify-center text-white text-2xl shadow-lg">
+                    💎
+                </div>
+                <div>
+                    <h1 class="text-2xl md:text-3xl font-extrabold text-slate-800 tracking-tight">
+                        חכמות בכסף <span class="text-xs bg-brand-100 text-brand-700 font-bold px-2.5 py-1 rounded-full border border-brand-200">משחק תקציב</span>
+                    </h1>
+                    <p class="text-xs text-slate-500">קבלת החלטות, קניות חכמות והתמודדות עם בלת"מים!</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <div class="flex items-center bg-white/90 px-3 py-1.5 rounded-xl border border-brand-200 shadow-sm">
+                    <span class="text-xs font-bold text-slate-500 ml-1.5">👤 שם:</span>
+                    <input type="text" id="playerNameInput" placeholder="שם המשתתפת" class="bg-transparent text-xs font-bold text-slate-800 outline-none w-28" onchange="onNameChange(this.value)">
+                </div>
+
+                <button onclick="toggleSound()" id="soundToggleBtn" class="bg-white/80 hover:bg-white text-slate-700 px-3 py-2 rounded-xl text-sm font-semibold shadow-sm border border-slate-200 flex items-center gap-2 transition">
+                    <i class="fa-solid fa-volume-high text-brand-500" id="soundIcon"></i>
+                </button>
+                <button onclick="switchRoleView('admin')" class="bg-slate-200 hover:bg-slate-300 text-slate-700 p-2 rounded-xl text-xs font-bold">
+                    <i class="fa-solid fa-user-gear"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Live Banner for Instructor Notes -->
+        <div id="liveInstructorNoteBanner" class="glass-card bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl p-4 shadow-xl border-2 border-purple-300 hidden">
+            <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl flex-shrink-0">
+                    👑
+                </div>
+                <div class="flex-1">
+                    <span class="text-[11px] font-black uppercase text-purple-200 tracking-wider">הודעה מהמדריכה בסדנא:</span>
+                    <p id="liveInstructorNoteText" class="text-sm font-bold mt-0.5"></p>
+                </div>
+                <button onclick="document.getElementById('liveInstructorNoteBanner').classList.add('hidden')" class="text-white/80 hover:text-white font-bold text-sm">✕</button>
+            </div>
+        </div>
+
+        <!-- Dashboard Widgets -->
+        <section class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+            <div class="glass-card rounded-2xl p-4 shadow-md border-r-4 border-emerald-500 flex flex-col justify-between">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs md:text-sm font-bold text-slate-500">כסף פנוי לבזבוז</span>
+                    <span class="p-2 bg-emerald-100 text-emerald-600 rounded-xl text-lg">👛</span>
+                </div>
+                <div class="mt-2">
+                    <span id="freeBalanceDisplay" class="text-2xl md:text-3xl font-black text-slate-800">₪500</span>
+                    <p class="text-[11px] text-slate-400 mt-0.5">זמין לרכישת פריטים</p>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-2xl p-4 shadow-md border-r-4 border-blue-500 flex flex-col justify-between">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs md:text-sm font-bold text-slate-500">קופת חירום וחיסכון</span>
+                    <span class="p-2 bg-blue-100 text-blue-600 rounded-xl text-lg">🛡️</span>
+                </div>
+                <div class="mt-2">
+                    <span id="emergencyBalanceDisplay" class="text-2xl md:text-3xl font-black text-blue-700">₪0</span>
+                    <p class="text-[11px] text-slate-400 mt-0.5">סכום שמוגן מבלת"מים!</p>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-2xl p-4 shadow-md border-r-4 border-purple-500 flex flex-col justify-between">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs md:text-sm font-bold text-slate-500">סה"כ הוצאות</span>
+                    <span class="p-2 bg-purple-100 text-purple-600 rounded-xl text-lg">🛍️</span>
+                </div>
+                <div class="mt-2">
+                    <span id="spentBalanceDisplay" class="text-2xl md:text-3xl font-black text-purple-700">₪0</span>
+                    <p class="text-[11px] text-slate-400 mt-0.5" id="purchasedCount">0 מוצרים נרכשו</p>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-2xl p-4 shadow-md border-r-4 border-pink-500 flex flex-col justify-between">
+                <div class="flex justify-between items-start">
+                    <span class="text-xs md:text-sm font-bold text-slate-500">מד אושר וכיף</span>
+                    <span class="p-2 bg-pink-100 text-pink-600 rounded-xl text-lg">💖</span>
+                </div>
+                <div class="mt-2">
+                    <div class="flex items-center gap-2">
+                        <span id="happinessDisplay" class="text-2xl md:text-3xl font-black text-pink-600">50</span>
+                        <span class="text-xs font-semibold text-slate-400">/ 100</span>
+                    </div>
+                    <div class="w-full bg-slate-200 rounded-full h-2 mt-2 overflow-hidden">
+                        <div id="happinessBar" class="bg-gradient-to-r from-pink-400 to-rose-500 h-2 rounded-full transition-all duration-500" style="width: 50%;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Emergency Fund Deposit Bar -->
+        <section class="glass-card rounded-2xl p-4 shadow-md bg-gradient-to-r from-blue-600 to-indigo-700 text-white flex flex-wrap md:flex-nowrap justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-2xl flex-shrink-0">
+                    🏦
+                </div>
+                <div>
+                    <h3 class="font-bold text-lg">חוק הזהב: שמרי כסף בצד לחירום!</h3>
+                    <p class="text-xs text-blue-100">בלת"ם יכול להפתיע בכל רגע. כסף שתעבירי לקופת החירום יהיה מוגן!</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 w-full md:w-auto">
+                <input type="number" id="depositAmountInput" placeholder="סכום (₪)" min="10" step="10" value="50" class="w-28 px-3 py-2 rounded-xl text-slate-800 text-sm font-bold outline-none border-2 border-white/30 text-center">
+                <button onclick="depositToEmergency()" class="bg-emerald-400 hover:bg-emerald-500 text-slate-900 font-extrabold px-4 py-2 rounded-xl text-sm transition shadow-lg flex-1 md:flex-initial whitespace-nowrap">
+                    <i class="fa-solid fa-piggy-bank ml-1"></i> העברי לחירום
+                </button>
+            </div>
+        </section>
+
+        <!-- Main Shop Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2 space-y-4">
+                <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none" id="categoryFilters"></div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" id="productsGrid"></div>
+            </div>
+
+            <div class="space-y-4">
+                <div class="glass-card rounded-2xl p-5 shadow-lg border border-white">
+                    <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-200">
+                        <h2 class="font-extrabold text-slate-800 text-lg flex items-center gap-2">
+                            <i class="fa-solid fa-receipt text-brand-600"></i>
+                            <span>מה קנית עד כה?</span>
+                        </h2>
+                        <span id="cartTotalHeader" class="text-xs font-bold bg-purple-100 text-purple-700 px-2.5 py-1 rounded-full">₪0</span>
+                    </div>
+                    <div id="cartItemsList" class="space-y-2.5 max-h-80 overflow-y-auto pr-1"></div>
+                    <div id="emptyCartMessage" class="text-center py-8 text-slate-400">
+                        <div class="text-4xl mb-2">🛍️</div>
+                        <p class="text-sm">עדיין לא קנית כלום.</p>
+                    </div>
+                </div>
+
+                <div class="glass-card rounded-2xl p-5 shadow-lg border border-white">
+                    <h3 class="font-extrabold text-slate-800 text-md mb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-bell text-amber-500"></i>
+                        <span>יומן אירועים ובלת"מים</span>
+                    </h3>
+                    <div id="eventLog" class="space-y-2 text-xs max-h-48 overflow-y-auto">
+                        <div class="p-2.5 bg-slate-100 rounded-xl text-slate-600">
+                            🎮 המשחק התחיל! קיבלת תקציב התחלתי של ₪500. בחרי בחוכמה!
+                        </div>
+                    </div>
+                </div>
+
+                <button onclick="finishGame()" class="w-full py-3.5 bg-gradient-to-r from-brand-600 to-purple-600 hover:from-brand-700 hover:to-purple-700 text-white font-extrabold rounded-2xl shadow-xl transition transform hover:scale-[1.02] flex items-center justify-center gap-2 text-base">
+                    <i class="fa-solid fa-flag-checkered text-xl"></i>
+                    <span>סיימתי לקנות - לעמוד הסיכום</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SURPRISE MODAL -->
+    <div id="surpriseModal" class="sheet-modal fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-start justify-center p-2 hidden">
+        <div class="bg-white rounded-3xl max-w-md w-full p-5 shadow-2xl border-4 border-red-500 text-center relative">
+            <div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-3 pulse-emergency">
+                🚨
+            </div>
+            <span class="bg-red-100 text-red-700 text-xs font-black px-3 py-1 rounded-full uppercase">בלת"ם! (אירוע בלתי מתוכנן)</span>
+            <h2 id="surpriseTitle" class="text-xl font-black text-slate-800 mt-3 mb-2">אירוע בלתי מתוכנן</h2>
+            <p id="surpriseDescription" class="text-slate-600 text-sm mb-3"></p>
+            <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 mb-3 flex justify-between items-center">
+                <span class="text-sm font-bold text-slate-600">סכום:</span>
+                <span id="surpriseCostDisplay" class="text-2xl font-black text-red-600">₪0</span>
+            </div>
+            <p id="surpriseFundsNote" class="text-sm font-bold text-slate-700 mb-3"></p>
+            <div id="surpriseSellBox" class="hidden text-right mb-3">
+                <p class="text-xs font-extrabold text-rose-700 mb-2">אין מספיק כסף. מכרו פריט שכבר קניתן:</p>
+                <div id="surpriseSellList" class="space-y-2 max-h-48 overflow-y-auto"></div>
+            </div>
+            <button type="button" id="surprisePayButton" onclick="handlePaySurprise()" class="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg transition">
+                אשרי ושלמי מהתקציב / חירום
+            </button>
+        </div>
+    </div>
+
+    <!-- INSPECTOR MODAL -->
+    <div id="inspectorModal" class="sheet-modal fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-start justify-center p-2 hidden">
+        <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border-2 border-purple-400">
+            <div class="flex justify-between items-center border-b pb-3 mb-4">
+                <h3 class="font-black text-slate-800 text-lg flex items-center gap-2">
+                    <span>🔎 פירוט הקניות של:</span>
+                    <span id="inspectPlayerName" class="text-purple-600"></span>
+                </h3>
+                <button onclick="closeInspectorModal()" class="w-8 h-8 rounded-full bg-slate-100 text-slate-600 font-bold">✕</button>
+            </div>
+            <div id="inspectCartList" class="space-y-2 max-h-60 overflow-y-auto mb-4"></div>
+            <button onclick="closeInspectorModal()" class="w-full py-2.5 bg-slate-200 text-slate-800 font-bold rounded-xl text-xs">סגרי חלון זה</button>
+        </div>
+    </div>
+
+    <!-- SUMMARY MODAL -->
+    <div id="summaryModal" class="sheet-modal fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-start justify-center p-2 hidden">
+        <div class="glass-card bg-white rounded-3xl max-w-2xl w-full p-6 md:p-8 shadow-2xl border-4 border-purple-400 max-h-[90vh] overflow-y-auto text-center">
+            <div class="w-20 h-20 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-4xl mx-auto mb-3">
+                🏆
+            </div>
+            <h2 class="text-2xl md:text-3xl font-black text-slate-800">סיכום סדנא: איך תכננת את התקציב?</h2>
+            <p class="text-slate-500 text-sm mb-6">הנה נתוני המשחק הסופיים שלך שנשלחו למדריכה:</p>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 text-right">
+                <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <span class="text-[11px] text-slate-400 font-bold block">כסף שנשאר פנוי</span>
+                    <span id="sumFree" class="text-xl font-black text-emerald-600">₪0</span>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <span class="text-[11px] text-slate-400 font-bold block">בקופת חירום</span>
+                    <span id="sumEmergency" class="text-xl font-black text-blue-600">₪0</span>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <span class="text-[11px] text-slate-400 font-bold block">הוצאה על קניות</span>
+                    <span id="sumSpent" class="text-xl font-black text-purple-600">₪0</span>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200">
+                    <span class="text-[11px] text-slate-400 font-bold block">מד אושר סופי</span>
+                    <span id="sumHappiness" class="text-xl font-black text-pink-600">0/100</span>
+                </div>
+            </div>
+
+            <div class="bg-purple-50 p-5 rounded-2xl border border-purple-200 text-right space-y-3 mb-6">
+                <h3 class="font-extrabold text-purple-900 text-base">💡 נקודות למחשבה בסדנא:</h3>
+                <ul id="reflectionList" class="text-xs md:text-sm text-purple-950 space-y-2 list-disc list-inside"></ul>
+            </div>
+
+            <button onclick="closeSummaryModal()" class="w-full py-3 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl text-sm shadow-lg">
+                חזרי למשחק
+            </button>
+        </div>
+    </div>
+
+    <!-- Application Script -->
+    <script>
+        const ADMIN_PASSCODE = "0664";
+        let soundEnabled = true;
+        let audioCtx = null;
+        let activeBroadcastListener = null;
+        let db = null;
+        let lastSyncedPlayerKey = null;
+        let acceptCloudWrites = true;
+        let clearArmed = false;
+
+        try {
+            if (typeof firebase !== 'undefined') {
+                if (!firebase.apps.length) {
+                    firebase.initializeApp({
+                        databaseURL: "https://budget-game-729a8-default-rtdb.firebaseio.com/"
+                    });
+                }
+                db = firebase.database();
+            }
+        } catch (err) {
+            console.error(err);
+        }
+
+        function playerKeyFromName(name) {
+            return String(name || '').trim().replace(/[.#$[\]/]/g, '_') || 'player';
+        }
+
+        window.updatePlayerLiveState = function(payload) {
+            if (!acceptCloudWrites || !db || !payload || !payload.playerName) return;
+            const key = playerKeyFromName(payload.playerName);
+            if (lastSyncedPlayerKey && lastSyncedPlayerKey !== key) {
+                db.ref('players/' + lastSyncedPlayerKey).remove();
+            }
+            lastSyncedPlayerKey = key;
+            db.ref('players/' + key).set(Object.assign({}, payload, {
+                key: key,
+                updatedAt: Date.now()
+            })).catch((err) => {
+                console.error(err);
+            });
+        };
+
+        window.subscribeToLivePlayers = function(callback) {
+            if (!db) return;
+            db.ref('players').on('value', (snap) => {
+                const data = snap.val() || {};
+                callback(Object.keys(data).map((id) => data[id]).filter((player) => player && player.playerName));
+            }, (err) => {
+                alert('לא ניתן לקרוא את המשתתפות מהענן: ' + (err && err.message ? err.message : err));
+            });
+        };
+
+        window.sendInstructorAction = function(target, action) {
+            if (!db) {
+                alert('אין חיבור לענן. בנות במכשירים אחרים לא יקבלו את זה.');
+                return;
+            }
+            db.ref('broadcast').set({
+                target: target,
+                action: action,
+                timestamp: Date.now()
+            }).catch((err) => {
+                alert('השליחה לענן נכשלה: ' + (err && err.message ? err.message : err));
+            });
+        };
+
+        window.clearAllResults = function() {
+            if (!db) return Promise.reject(new Error('אין חיבור לענן'));
+            const clearedAt = Date.now();
+            return db.ref().update({
+                players: null,
+                clearedAt: clearedAt,
+                broadcast: {
+                    target: 'ALL',
+                    action: { type: 'reset' },
+                    timestamp: clearedAt
+                }
+            });
+        };
+
+        // Local Storage State Sync across devices
+        function saveLocalBroadcast(action) {
+            localStorage.setItem('smg_broadcast_action', JSON.stringify({ action: action, timestamp: Date.now() }));
+        }
+
+        function saveLocalPlayerData(playerData) {
+            let players = JSON.parse(localStorage.getItem('smg_live_players') || '{}');
+            players[playerData.playerName] = { ...playerData, updatedAt: new Date().toISOString() };
+            localStorage.setItem('smg_live_players', JSON.stringify(players));
+        }
+
+        function getLocalPlayers() {
+            const playersMap = JSON.parse(localStorage.getItem('smg_live_players') || '{}');
+            return Object.values(playersMap);
+        }
+
+        function clearLocalPlayers() {
+            localStorage.removeItem('smg_live_players');
+        }
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const soundIcon = document.getElementById('soundIcon');
+            if (soundIcon) soundIcon.className = soundEnabled ? "fa-solid fa-volume-high text-brand-500" : "fa-solid fa-volume-xmark text-slate-400";
+        }
+
+        function playSound(type) {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                if (!audioCtx) return;
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                if (type === 'buy') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, now);
+                    osc.frequency.setValueAtTime(659.25, now + 0.08);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                } else if (type === 'refund') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(500, now);
+                    osc.frequency.exponentialRampToValueAtTime(200, now + 0.2);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+                    osc.start(now);
+                    osc.stop(now + 0.2);
+                } else if (type === 'deposit') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(880, now);
+                    osc.frequency.setValueAtTime(1174, now + 0.08);
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                } else if (type === 'alert') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(440, now);
+                    osc.frequency.setValueAtTime(880, now + 0.1);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                }
+            } catch (e) {}
+        }
+
+        let currentRole = null;
+        let gameState = {
+            playerName: '',
+            initialBudget: 500,
+            freeBalance: 500,
+            emergencyBalance: 0,
+            spentTotal: 0,
+            happiness: 50,
+            purchases: [],
+            activeCategory: 'all',
+            pendingSurprise: null
+        };
+
+        let cachedLivePlayers = [];
+
+        const categories = [
+            { id: 'all', label: 'הכל ✨' },
+            { id: 'fashion', label: 'אופנה וטיפוח 👗' },
+            { id: 'food', label: 'אוכל ובילויים 🍕' },
+            { id: 'tech', label: 'גאדג\'טים ותחביבים 🎮' },
+            { id: 'gifts', label: 'מתנות ואירועים 🎁' }
+        ];
+
+        const products = [
+            { id: 1, name: 'חולצה אופנתית', category: 'fashion', price: 80, happiness: 10, isNeed: false, emoji: '👕', desc: 'חולצה חדשה שראית בקניון' },
+            { id: 2, name: 'נעלי ספורט ממותגות', category: 'fashion', price: 220, happiness: 20, isNeed: false, emoji: '👟', desc: 'זוג נעליים מגניב לחוגים' },
+            { id: 3, name: 'סט טיפוח וקרמים', category: 'fashion', price: 60, happiness: 8, isNeed: false, emoji: '🧴', desc: 'ערכת טיפוח לפנים ולשיער' },
+            { id: 4, name: 'פיצה ושתייה עם חברות', category: 'food', price: 45, happiness: 12, isNeed: false, emoji: '🍕', desc: 'ערב כיף של יציאה בסוף השבוע' },
+            { id: 5, name: 'מנה באייסקפה / שייק', category: 'food', price: 25, happiness: 5, isNeed: false, emoji: '🧋', desc: 'פינוק קטן בדרך הביתה' },
+            { id: 6, name: 'ארוחת צהריים לבית הספר', category: 'food', price: 35, happiness: 4, isNeed: true, emoji: '🥪', desc: 'ארוחה מזינה כשהאוכל נשכח בבית' },
+            { id: 7, name: 'אוזניות אלחוטיות', category: 'tech', price: 150, happiness: 18, isNeed: false, emoji: '🎧', desc: 'לשמוע מוזיקה ולראות סרטונים' },
+            { id: 8, name: 'משחק מחשב/אפליקציה', category: 'tech', price: 70, happiness: 10, isNeed: false, emoji: '🎮', desc: 'מנוי חודשי או משחק חדש' },
+            { id: 9, name: 'מחברת וערכת יצירה', category: 'tech', price: 40, happiness: 7, isNeed: true, emoji: '🎨', desc: 'ציוד לבית ספר ולזמן פנאי' },
+            { id: 10, name: 'מתנת יום הולדת לחברה', category: 'gifts', price: 65, happiness: 15, isNeed: true, emoji: '🎁', desc: 'אי אפשר להגיע למסיבה בלי מתנה!' },
+            { id: 11, name: 'כרטיס להופעה / סרט', category: 'gifts', price: 90, happiness: 15, isNeed: false, emoji: '🎟', desc: 'חוויה יחד עם כל הבנות' },
+            { id: 12, name: 'ספר קריאה מרתק', category: 'gifts', price: 50, happiness: 8, isNeed: false, emoji: '📚', desc: 'ספר מומלץ שכולן מדברות עליו' }
+        ];
+
+        const presetSurprises = [
+            { title: 'מסך הטלפון נשבר!', cost: 150, desc: 'הטלפון החליק מהיד והמסך התרסק. תיקון במעבדה!', emoji: '📱' },
+            { title: 'מתנה מפתאום ליומולדת', cost: 70, desc: 'חברה טובה הזמינה את כולן למסיבת הפתעה בסוף השבוע.', emoji: '🎂' },
+            { title: 'איבוד חופשי-חודשי / רב קו', cost: 50, desc: 'הכרטיס נעלם בדרך. צריך להנפיק חדש ולטעון.', emoji: '🚌' },
+            { title: 'טיפול שיניים דחוף', cost: 120, desc: 'כאב שן פתאומי הצריך ביקור ותרופה.', emoji: '🦷' },
+            { title: 'מתנה מסבתא! (הכנסה 🎁)', cost: -100, desc: 'סבתא קפצה לביקור ונתנה לך 100 ש"ח דמי כיס!', emoji: '👵' }
+        ];
+
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const mode = urlParams.get('mode');
+
+            if (mode === 'admin') requestAdminAccess();
+            else if (mode === 'player') selectMode('player');
+            else document.getElementById('roleSelectorScreen').classList.remove('hidden');
+        };
+
+        function requestAdminAccess() {
+            document.getElementById('adminPasscodeInput').value = '';
+            openSheet('adminAuthModal');
+            setTimeout(() => document.getElementById('adminPasscodeInput').focus(), 100);
+        }
+
+        function closeAdminAuthModal() {
+            document.getElementById('adminAuthModal').classList.add('hidden');
+        }
+
+        function verifyAdminPasscode() {
+            const input = document.getElementById('adminPasscodeInput').value.trim();
+            if (input === ADMIN_PASSCODE) {
+                closeAdminAuthModal();
+                selectMode('admin');
+            } else {
+                alert('קוד גישה שגוי! נסי שוב (הקוד הוא 0664).');
+                document.getElementById('adminPasscodeInput').value = '';
+                document.getElementById('adminPasscodeInput').focus();
+            }
+        }
+
+        function selectMode(role) {
+            currentRole = role;
+            document.getElementById('roleSelectorScreen').classList.add('hidden');
+            document.getElementById('adminInterface').classList.toggle('hidden', role !== 'admin');
+            document.getElementById('playerInterface').classList.toggle('hidden', role !== 'player');
+
+            if (role === 'admin') initAdminDashboard();
+            else if (role === 'player') promptPlayerWelcome();
+        }
+
+        function switchRoleView(targetRole) {
+            if (targetRole === 'admin') requestAdminAccess();
+            else selectMode('player');
+        }
+
+        function promptPlayerWelcome() {
+            const savedName = localStorage.getItem('smg_player_name');
+            if (savedName) {
+                gameState.playerName = savedName;
+                document.getElementById('playerNameInput').value = savedName;
+                initPlayerGame();
+            } else {
+                openSheet('playerWelcomeModal');
+                document.getElementById('welcomePlayerNameInput').focus();
+            }
+        }
+
+        function confirmPlayerStart() {
+            const inputName = document.getElementById('welcomePlayerNameInput').value.trim();
+            if (!inputName) return alert('נא להזין שם כדי להתחיל!');
+
+            gameState.playerName = inputName;
+            localStorage.setItem('smg_player_name', inputName);
+            document.getElementById('playerNameInput').value = inputName;
+            document.getElementById('playerWelcomeModal').classList.add('hidden');
+            initPlayerGame();
+        }
+
+        function resetLocalGame() {
+            acceptCloudWrites = false;
+            lastSyncedPlayerKey = null;
+            gameState.playerName = '';
+            gameState.freeBalance = 500;
+            gameState.emergencyBalance = 0;
+            gameState.spentTotal = 0;
+            gameState.happiness = 50;
+            gameState.purchases = [];
+            gameState.pendingSurprise = null;
+            localStorage.removeItem('smg_player_name');
+            localStorage.removeItem('smg_live_players');
+            ['playerWelcomeModal', 'surpriseModal', 'summaryModal', 'inspectorModal', 'playerInterface', 'adminInterface'].forEach((id) => {
+                const el = document.getElementById(id);
+                if (el) el.classList.add('hidden');
+            });
+            const roleScreen = document.getElementById('roleSelectorScreen');
+            if (roleScreen) roleScreen.classList.remove('hidden');
+            currentRole = null;
+        }
+
+        function initPlayerGame() {
+            acceptCloudWrites = true;
+            renderCategoryFilters();
+            renderProducts();
+            updateUI();
+
+            if (window.playerCloudListenersReady) return;
+            window.playerCloudListenersReady = true;
+
+            window.addEventListener('storage', (e) => {
+                if (e.key === 'smg_broadcast_action' && e.newValue) {
+                    try {
+                        const data = JSON.parse(e.newValue);
+                        if (data && data.action) {
+                            const act = data.action;
+                            if (act.action && act.action.type === 'reset') {
+                                resetLocalGame();
+                                return;
+                            }
+                            if (act.target === 'ALL' || act.target === gameState.playerName) {
+                                if (act.action.type === 'surprise') activateSurprise(act.action.surprise);
+                                else if (act.action.type === 'note') displayInstructorNote(act.action.text);
+                            }
+                        }
+                    } catch (err) {}
+                }
+            });
+
+            if (!db) return;
+            let ignoreExistingBroadcast = true;
+            db.ref('broadcast').on('value', (snap) => {
+                const data = snap.val();
+                if (ignoreExistingBroadcast) {
+                    ignoreExistingBroadcast = false;
+                    window.lastBroadcastTs = data && data.timestamp ? data.timestamp : 0;
+                    return;
+                }
+                if (!data || !data.action || !(data.timestamp > (window.lastBroadcastTs || 0))) return;
+                window.lastBroadcastTs = data.timestamp;
+                if (data.action.type === 'reset') {
+                    resetLocalGame();
+                    return;
+                }
+                if (data.target === 'ALL' || data.target === gameState.playerName) {
+                    if (data.action.type === 'surprise') activateSurprise(data.action.surprise);
+                    else if (data.action.type === 'note') displayInstructorNote(data.action.text);
+                }
+            });
+        }
+
+        function onNameChange(val) {
+            gameState.playerName = val.trim() || 'משתתפת';
+            localStorage.setItem('smg_player_name', gameState.playerName);
+            syncStateToFirebase();
+        }
+
+        function syncStateToFirebase() {
+            const payload = {
+                playerName: gameState.playerName,
+                freeBalance: gameState.freeBalance,
+                emergencyBalance: gameState.emergencyBalance,
+                spentTotal: gameState.spentTotal,
+                happiness: gameState.happiness,
+                purchases: gameState.purchases
+            };
+
+            saveLocalPlayerData(payload);
+
+            if (typeof window.updatePlayerLiveState === 'function' && gameState.playerName) {
+                window.updatePlayerLiveState(payload);
+            }
+        }
+
+        function renderCategoryFilters() {
+            const container = document.getElementById('categoryFilters');
+            container.innerHTML = categories.map(cat => `
+                <button onclick="setCategory('${cat.id}')" 
+                    class="px-3.5 py-2 rounded-xl text-xs font-bold transition whitespace-nowrap ${gameState.activeCategory === cat.id ? 'bg-brand-600 text-white shadow-md' : 'bg-white/80 text-slate-700 hover:bg-white'}">
+                    ${cat.label}
+                </button>
+            `).join('');
+        }
+
+        function setCategory(catId) {
+            gameState.activeCategory = catId;
+            renderCategoryFilters();
+            renderProducts();
+        }
+
+        function renderProducts() {
+            const container = document.getElementById('productsGrid');
+            const filtered = gameState.activeCategory === 'all' ? products : products.filter(p => p.category === gameState.activeCategory);
+
+            container.innerHTML = filtered.map(product => {
+                const isBought = gameState.purchases.some(item => item.id === product.id);
+                const canAfford = gameState.freeBalance >= product.price;
+
+                return `
+                    <div class="glass-card rounded-2xl p-4 shadow-sm flex flex-col justify-between border ${isBought ? 'border-emerald-300 bg-emerald-50/40' : 'border-white'}">
+                        <div>
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="text-3xl p-2 bg-white rounded-2xl shadow-sm">${product.emoji}</span>
+                                <div class="flex flex-col items-end gap-1">
+                                    <span class="text-sm font-extrabold text-slate-800 bg-slate-100 px-2.5 py-1 rounded-xl">₪${product.price}</span>
+                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-md ${product.isNeed ? 'bg-amber-100 text-amber-800' : 'bg-purple-100 text-purple-800'}">
+                                        ${product.isNeed ? '📌 צריכה' : '✨ רוצה'}
+                                    </span>
+                                </div>
+                            </div>
+                            <h3 class="font-extrabold text-slate-800 text-sm mb-1">${product.name}</h3>
+                            <p class="text-[11px] text-slate-500 mb-3">${product.desc}</p>
+                        </div>
+                        <div class="flex justify-between items-center pt-2 border-t border-slate-100">
+                            <span class="text-xs font-bold text-pink-600">💖 +${product.happiness}</span>
+                            ${isBought ? `
+                                <button onclick="refundProduct(${product.id})" class="px-3 py-1.5 bg-rose-100 text-rose-700 text-xs font-bold rounded-xl">החזירי</button>
+                            ` : `
+                                <button onclick="buyProduct(${product.id})" ${!canAfford ? 'disabled' : ''} class="px-3 py-1.5 rounded-xl text-xs font-bold ${canAfford ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'}">קני כעת</button>
+                            `}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function buyProduct(id) {
+            const product = products.find(p => p.id === id);
+            if (!product || gameState.freeBalance < product.price) return;
+            gameState.freeBalance -= product.price;
+            gameState.spentTotal += product.price;
+            gameState.happiness = Math.min(100, gameState.happiness + product.happiness);
+            gameState.purchases.push(product);
+            playSound('buy');
+            logEvent(`🛍️ קנית את "${product.name}" ב-₪${product.price}`);
+            updateUI();
+        }
+
+        function refundProduct(id) {
+            const idx = gameState.purchases.findIndex(p => p.id === id);
+            if (idx === -1) return;
+            const product = gameState.purchases[idx];
+            gameState.purchases.splice(idx, 1);
+            gameState.freeBalance += product.price;
+            gameState.spentTotal -= product.price;
+            gameState.happiness = Math.max(0, gameState.happiness - product.happiness);
+            playSound('refund');
+            logEvent(`↩️ החזרת את "${product.name}" וקיבלת ₪${product.price}`);
+            updateUI();
+        }
+
+        function depositToEmergency() {
+            const amount = parseInt(document.getElementById('depositAmountInput').value) || 0;
+            if (amount <= 0 || amount > gameState.freeBalance) return;
+            gameState.freeBalance -= amount;
+            gameState.emergencyBalance += amount;
+            playSound('deposit');
+            logEvent(`🛡️ העברת ₪${amount} לקופת חירום!`);
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('freeBalanceDisplay').innerText = `₪${gameState.freeBalance}`;
+            document.getElementById('emergencyBalanceDisplay').innerText = `₪${gameState.emergencyBalance}`;
+            document.getElementById('spentBalanceDisplay').innerText = `₪${gameState.spentTotal}`;
+            document.getElementById('purchasedCount').innerText = `${gameState.purchases.length} מוצרים נרכשו`;
+            document.getElementById('happinessDisplay').innerText = gameState.happiness;
+            document.getElementById('happinessBar').style.width = `${gameState.happiness}%`;
+
+            renderCart();
+            renderProducts();
+            syncStateToFirebase();
+        }
+
+        function renderCart() {
+            const list = document.getElementById('cartItemsList');
+            const empty = document.getElementById('emptyCartMessage');
+            document.getElementById('cartTotalHeader').innerText = `₪${gameState.spentTotal}`;
+
+            if (gameState.purchases.length === 0) {
+                list.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+            empty.classList.add('hidden');
+            list.innerHTML = gameState.purchases.map(item => `
+                <div class="flex justify-between items-center bg-white p-2.5 rounded-xl border border-slate-100 text-xs">
+                    <div class="flex items-center gap-2">
+                        <span>${item.emoji}</span>
+                        <span class="font-bold text-slate-800">${item.name} (₪${item.price})</span>
+                    </div>
+                    <button onclick="refundProduct(${item.id})" class="text-rose-500 font-bold">החזירי</button>
+                </div>
+            `).join('');
+        }
+
+        function logEvent(msg) {
+            const container = document.getElementById('eventLog');
+            const entry = document.createElement('div');
+            entry.className = 'p-2.5 bg-white rounded-xl border border-slate-200 text-slate-700 shadow-sm';
+            entry.innerText = msg;
+            container.prepend(entry);
+        }
+
+        function openSheet(id) {
+            const modal = document.getElementById(id);
+            modal.classList.remove('hidden');
+            modal.scrollTop = 0;
+            window.scrollTo(0, 0);
+            const card = modal.firstElementChild;
+            if (!card) return;
+            try { card.scrollIntoView({ block: 'start' }); } catch (e) {}
+        }
+
+        function activateSurprise(surprise) {
+            gameState.pendingSurprise = surprise;
+            playSound('alert');
+            document.getElementById('surpriseTitle').innerText = `${surprise.emoji || '🚨'} ${surprise.title}`;
+            document.getElementById('surpriseDescription').innerText = surprise.desc;
+            document.getElementById('surpriseCostDisplay').innerText = surprise.cost > 0 ? `₪${surprise.cost}` : `+₪${Math.abs(surprise.cost)}`;
+            openSheet('surpriseModal');
+            refreshSurprisePanel();
+        }
+
+        function surpriseCost() {
+            const surprise = gameState.pendingSurprise;
+            return surprise ? Number(surprise.cost) || 0 : 0;
+        }
+
+        function moneyOnHand() {
+            return gameState.freeBalance + gameState.emergencyBalance;
+        }
+
+        function refreshSurprisePanel() {
+            const note = document.getElementById('surpriseFundsNote');
+            const box = document.getElementById('surpriseSellBox');
+            const list = document.getElementById('surpriseSellList');
+            const button = document.getElementById('surprisePayButton');
+            if (!note || !box || !list || !button || !gameState.pendingSurprise) return;
+
+            const cost = surpriseCost();
+            if (cost <= 0) {
+                note.textContent = 'זו הכנסה. הסכום יתווסף לכסף הפנוי.';
+                box.classList.add('hidden');
+                button.textContent = 'אשרי וקבלי את הכסף';
+                return;
+            }
+
+            const missing = cost - moneyOnHand();
+            if (missing <= 0) {
+                note.textContent = `יש מספיק כסף: ₪${gameState.freeBalance} פנוי ו-₪${gameState.emergencyBalance} בקופת החירום.`;
+                box.classList.add('hidden');
+                button.textContent = 'אשרי ושלמי מהתקציב / חירום';
+                return;
+            }
+
+            note.textContent = `חסרים ₪${missing}. אי אפשר לשלם לפני שמוכרים משהו שכבר קניתן.`;
+            box.classList.remove('hidden');
+            if (!gameState.purchases.length) {
+                list.innerHTML = '<p class="text-xs font-bold text-rose-700 bg-rose-50 rounded-xl p-3">אין יותר פריטים למכירה. אפשר לשלם רק את מה שנשאר, והשאר יישאר כחוב.</p>';
+                button.textContent = 'שלמי את כל מה שנשאר';
+                return;
+            }
+
+            list.innerHTML = gameState.purchases.map((item) => `
+                <button type="button" onclick="sellForSurprise(${item.id})" class="w-full flex justify-between items-center gap-2 bg-white border border-rose-200 rounded-xl px-3 py-2 text-xs font-bold">
+                    <span>${item.emoji} ${item.name}</span>
+                    <span class="text-rose-600 whitespace-nowrap">מכרי ב-₪${item.price}</span>
+                </button>
+            `).join('');
+            button.textContent = 'קודם מוכרות, אחר כך משלמות';
+        }
+
+        function sellForSurprise(id) {
+            refundProduct(id);
+            refreshSurprisePanel();
+        }
+
+        function closeSurprise() {
+            document.getElementById('surpriseModal').classList.add('hidden');
+            gameState.pendingSurprise = null;
+            updateUI();
+        }
+
+        function handlePaySurprise() {
+            const surprise = gameState.pendingSurprise;
+            if (!surprise) return;
+
+            const cost = surpriseCost();
+            if (cost <= 0) {
+                gameState.freeBalance += Math.abs(cost);
+                logEvent(`🎉 הכנסה מפתיעה: ₪${Math.abs(cost)} (${surprise.title})`);
+                closeSurprise();
+                return;
+            }
+
+            const available = moneyOnHand();
+            if (available < cost) {
+                refreshSurprisePanel();
+                if (gameState.purchases.length > 0) return;
+                const unpaid = cost - available;
+                gameState.freeBalance = 0;
+                gameState.emergencyBalance = 0;
+                logEvent(`❌ שולם ₪${available} מתוך ₪${cost} עבור "${surprise.title}". נשאר חוב של ₪${unpaid}.`);
+                closeSurprise();
+                return;
+            }
+
+            if (gameState.freeBalance >= cost) {
+                gameState.freeBalance -= cost;
+                logEvent(`🚨 שולם בלת"ם של ₪${cost} מהכסף הפנוי (${surprise.title})`);
+            } else {
+                const fromEmergency = cost - gameState.freeBalance;
+                gameState.freeBalance = 0;
+                gameState.emergencyBalance -= fromEmergency;
+                logEvent(`🛡️ שולם בלת"ם של ₪${cost}: חלק מהכסף הפנוי ו-₪${fromEmergency} מקופת החירום (${surprise.title})`);
+            }
+            closeSurprise();
+        }
+
+        function displayInstructorNote(text) {
+            playSound('alert');
+            const banner = document.getElementById('liveInstructorNoteBanner');
+            document.getElementById('liveInstructorNoteText').innerText = text;
+            banner.classList.remove('hidden');
+        }
+
+        function finishGame() {
+            document.getElementById('sumFree').innerText = `₪${gameState.freeBalance}`;
+            document.getElementById('sumEmergency').innerText = `₪${gameState.emergencyBalance}`;
+            document.getElementById('sumSpent').innerText = `₪${gameState.spentTotal}`;
+            document.getElementById('sumHappiness').innerText = `${gameState.happiness}/100`;
+
+            const reflectionList = document.getElementById('reflectionList');
+            reflectionList.innerHTML = `
+                <li>${gameState.emergencyBalance > 0 ? `✨ שמרת ₪${gameState.emergencyBalance} בקופת חירום - כל הכבוד!` : `⚠️ לא שמרת לקופת חירום!`}</li>
+                <li>📊 קנית ${gameState.purchases.filter(p => p.isNeed).length} מוצרי בסיס ו-${gameState.purchases.filter(p => !p.isNeed).length} מוצרי מותרות.</li>
+            `;
+
+            try { confetti({ particleCount: 70, spread: 60 }); } catch (e) {}
+            openSheet('summaryModal');
+        }
+
+        function closeSummaryModal() {
+            document.getElementById('summaryModal').classList.add('hidden');
+        }
+
+        function initAdminDashboard() {
+            renderAdminPresets();
+
+            const refreshAdminView = () => {
+                if (window.adminCloudReady) return;
+                const players = getLocalPlayers();
+                cachedLivePlayers = players;
+                renderAdminPlayerCards(players);
+                updateTargetPlayerDropdown(players);
+            };
+
+            refreshAdminView();
+
+            if (!window.adminCloudReady && typeof window.subscribeToLivePlayers === 'function') {
+                window.adminCloudReady = true;
+                window.subscribeToLivePlayers((players) => {
+                    cachedLivePlayers = players;
+                    renderAdminPlayerCards(players);
+                    updateTargetPlayerDropdown(players);
+                });
+            }
+
+            window.addEventListener('storage', (e) => {
+                if (e.key === 'smg_live_players') {
+                    refreshAdminView();
+                }
+            });
+        }
+
+        function renderAdminPresets() {
+            const container = document.getElementById('adminPresetEvents');
+            container.innerHTML = presetSurprises.map((s, idx) => `
+                <button onclick="broadcastPresetSurprise(${idx})" class="p-2.5 bg-white hover:bg-amber-50 rounded-xl border border-slate-200 text-right shadow-sm transition">
+                    <span class="font-bold text-xs text-slate-800 block">${s.emoji} ${s.title}</span>
+                    <span class="text-[10px] ${s.cost > 0 ? 'text-red-600 font-bold' : 'text-emerald-600 font-bold'}">${s.cost > 0 ? `-₪${s.cost}` : `+₪${Math.abs(s.cost)}`}</span>
+                </button>
+            `).join('');
+        }
+
+        function renderAdminPlayerCards(players) {
+            const container = document.getElementById('adminPlayersGrid');
+            document.getElementById('activePlayerCount').innerText = players.length;
+
+            if (players.length === 0) {
+                container.innerHTML = `<div class="col-span-full text-center py-10 text-slate-400"><p class="text-sm">עדיין אף נערה לא נכנסה למשחק בסדנא זו.</p></div>`;
+                return;
+            }
+
+            container.innerHTML = players.map(p => `
+                <div class="glass-card bg-white rounded-2xl p-4 shadow-sm border border-purple-100 flex flex-col justify-between">
+                    <div>
+                        <div class="flex justify-between items-center mb-2 pb-2 border-b">
+                            <span class="font-extrabold text-slate-800 text-sm flex items-center gap-1.5">
+                                <i class="fa-solid fa-user text-brand-500"></i> ${p.playerName}
+                            </span>
+                            <span class="text-[10px] font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">💖 ${p.happiness}/100</span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-1 text-center text-xs mb-3">
+                            <div class="bg-emerald-50 p-1.5 rounded-xl">
+                                <span class="text-[10px] text-slate-400 block font-bold">פנוי</span>
+                                <span class="font-black text-emerald-600">₪${p.freeBalance}</span>
+                            </div>
+                            <div class="bg-blue-50 p-1.5 rounded-xl">
+                                <span class="text-[10px] text-slate-400 block font-bold">חירום</span>
+                                <span class="font-black text-blue-600">₪${p.emergencyBalance}</span>
+                            </div>
+                            <div class="bg-purple-50 p-1.5 rounded-xl">
+                                <span class="text-[10px] text-slate-400 block font-bold">הוצאות</span>
+                                <span class="font-black text-purple-600">₪${p.spentTotal}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button onclick="inspectPlayerCart('${p.playerName}')" class="w-full py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition">
+                        🔎 מה קנתה? (${p.purchases ? p.purchases.length : 0} פריטים)
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function updateTargetPlayerDropdown(players) {
+            const select = document.getElementById('noteTargetSelect');
+            const currentVal = select.value;
+            select.innerHTML = '<option value="ALL">כל הבנות בסדנא 📣</option>' +
+                players.map(p => `<option value="${p.playerName}">${p.playerName}</option>`).join('');
+            select.value = currentVal;
+        }
+
+        function inspectPlayerCart(playerName) {
+            const player = cachedLivePlayers.find(p => p.playerName === playerName);
+            if (!player) return;
+            document.getElementById('inspectPlayerName').innerText = player.playerName;
+            const list = document.getElementById('inspectCartList');
+            if (!player.purchases || player.purchases.length === 0) {
+                list.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">טרם קנתה מוצרים.</p>`;
+            } else {
+                list.innerHTML = player.purchases.map(item => `
+                    <div class="flex justify-between items-center bg-slate-50 p-2.5 rounded-xl text-xs">
+                        <span>${item.emoji} <b>${item.name}</b></span>
+                        <span class="font-bold text-slate-600">₪${item.price}</span>
+                    </div>
+                `).join('');
+            }
+            openSheet('inspectorModal');
+        }
+
+        function closeInspectorModal() {
+            document.getElementById('inspectorModal').classList.add('hidden');
+        }
+
+        function broadcastPresetSurprise(idx) {
+            const surprise = presetSurprises[idx];
+            const actionData = { target: 'ALL', action: { type: 'surprise', surprise: surprise } };
+            saveLocalBroadcast(actionData);
+            if (typeof window.sendInstructorAction === 'function') {
+                window.sendInstructorAction('ALL', { type: 'surprise', surprise: surprise });
+            }
+            alert(`בלת"ם "${surprise.title}" שוגר לכל הבנות בסדנא!`);
+        }
+
+        function broadcastCustomSurprise() {
+            const title = document.getElementById('customTitleInput').value.trim();
+            const cost = parseInt(document.getElementById('customCostInput').value) || 0;
+            const type = document.getElementById('customTypeSelect').value;
+
+            if (!title) return alert('נא להזין כותרת לבלת"ם');
+
+            const surprise = {
+                title: title,
+                cost: type === 'expense' ? cost : -cost,
+                desc: 'אירוע יזום ממנהלת הסדנא!',
+                emoji: type === 'expense' ? '🚨' : '🎁'
+            };
+
+            const actionData = { target: 'ALL', action: { type: 'surprise', surprise: surprise } };
+            saveLocalBroadcast(actionData);
+
+            if (typeof window.sendInstructorAction === 'function') {
+                window.sendInstructorAction('ALL', { type: 'surprise', surprise: surprise });
+            }
+            alert(`בלת"ם אישי שוגר לכל הבנות!`);
+        }
+
+        function sendInstructorNote() {
+            const target = document.getElementById('noteTargetSelect').value;
+            const text = document.getElementById('noteTextInput').value.trim();
+            if (!text) return alert('נא להקליד הערה');
+
+            const actionData = { target: target, action: { type: 'note', text: text } };
+            saveLocalBroadcast(actionData);
+
+            if (typeof window.sendInstructorAction === 'function') {
+                window.sendInstructorAction(target, { type: 'note', text: text });
+            }
+            alert(`ההערה נשלחה בהצלחה!`);
+            document.getElementById('noteTextInput').value = '';
+        }
+
+        async function confirmClearResults() {
+            const button = document.getElementById('clearResultsBtn');
+            if (!clearArmed) {
+                clearArmed = true;
+                if (button) button.textContent = 'לחצי שוב כדי למחוק את כל הנתונים';
+                setTimeout(() => {
+                    clearArmed = false;
+                    if (button) button.textContent = 'איפוס נתונים לסדנא חדשה';
+                }, 5000);
+                return;
+            }
+            clearArmed = false;
+            if (button) button.textContent = 'מוחקת נתונים...';
+            clearLocalPlayers();
+            saveLocalBroadcast({ target: 'ALL', action: { type: 'reset' } });
+            try {
+                await window.clearAllResults();
+                cachedLivePlayers = [];
+                renderAdminPlayerCards([]);
+                updateTargetPlayerDropdown([]);
+                if (button) button.textContent = 'הנתונים נמחקו. אפשר להתחיל סדנא חדשה';
+            } catch (err) {
+                if (button) button.textContent = 'המחיקה נכשלה, נסי שוב';
+                console.error(err);
+            }
+            setTimeout(() => {
+                if (button) button.textContent = 'איפוס נתונים לסדנא חדשה';
+            }, 4000);
+        }
+    </script>
+</body>
+</html>
